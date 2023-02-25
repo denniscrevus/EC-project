@@ -10,22 +10,26 @@ from revolve2.runners.mujoco import ModularRobotRerunner
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 from itertools import tee
-
+from genotype import Genotype, GenotypeSerializer, crossover, develop, mutate
+from pyrr import Quaternion, Vector3
+from revolve2.core.physics.environment_actor_controller import (
+    EnvironmentActorController,
+)
+from revolve2.core.physics.running import (
+    ActorState,
+    Batch,
+    Environment,
+    PosedActor,
+    Runner,
+)
+from revolve2.runners.mujoco import LocalRunner
 
 async def main() -> None:
     """Run the script."""
     db = open_async_database_sqlite("./database0")
 
     async with AsyncSession(db) as session:
-        # sorted_individuals = (
-        #     await session.execute(
-        #         select(DbEAOptimizerIndividual, DbFloat)
-        #         .filter(DbEAOptimizerIndividual.fitness_id == DbFloat.id)
-        #         .order_by(DbFloat.value.desc())
-        #     )
-        # )
-
-        desired_generation_id = 2
+        desired_generation_id = 11
 
         sorted_individuals = (
             await session.execute(
@@ -100,12 +104,15 @@ async def main() -> None:
 
         robots_to_simulate = []
         counter = 0
+        genotypes = []
 
         for best_individual in sorted_individuals:
             # print(f"fitness: {best_individual[2].value}")
-            print(f"Generation = {best_individual[0].generation_index}, {distances[counter]}, {remaining_powers[counter]}")
+            if(distances[counter] != 2.6):
+                counter += 1
+                continue
 
-            counter += 1
+            # print(f"Generation = {best_individual[0].generation_index}, {distances[counter]}, {remaining_powers[counter]}")
 
             genotype = (
                 await GenotypeSerializer.from_database(
@@ -113,11 +120,43 @@ async def main() -> None:
                 )
             )[0]
 
+            genotypes.append(genotype)
             robots_to_simulate.append(develop(genotype))
+            counter += 1
+
+        batch = Batch(
+            simulation_time=10,
+            sampling_frequency=5,
+            control_frequency=60,
+        )
+
+        for genotype in genotypes:
+            actor, controller = develop(genotype).make_actor_and_controller()
+            bounding_box = actor.calc_aabb()
+            env = Environment(EnvironmentActorController(controller))
+            env.actors.append(
+                PosedActor(
+                    actor,
+                    Vector3(
+                        [
+                            0.0,
+                            0.0,
+                            bounding_box.size.z / 2.0 - bounding_box.offset.z,
+                        ]
+                    ),
+                    Quaternion(),
+                    [0.0 for _ in controller.get_dof_targets()],
+                ),
+            )
+
+            batch.environments.append(env)
+
+        runner = LocalRunner(headless=True, num_simulators=64)
+        batch_results = await runner.run_batch(batch)
+        print(batch_results)
 
         rerunner = ModularRobotRerunner()
         await rerunner.rerun(robots_to_simulate, 20)
-
 
 if __name__ == "__main__":
     import asyncio

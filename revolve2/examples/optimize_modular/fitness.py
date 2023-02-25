@@ -11,9 +11,6 @@ def calculate_fitness(begin_state: ActorState, end_state: ActorState) -> (float,
     # take remaining power of end state
     remaining_power = end_state.remaining_power
 
-    print("Remaining power = ", remaining_power)
-    print("Distance = ", distance)
-
     return (distance, remaining_power)
 
 

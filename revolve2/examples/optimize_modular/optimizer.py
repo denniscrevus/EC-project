@@ -34,6 +34,7 @@ from sqlalchemy.future import select
 from individual import Individual
 from fitness import calculate_fitness
 from decimal import *
+import os
 
 class Optimizer(EAOptimizer[Genotype, float]):
     """
@@ -331,13 +332,21 @@ class Optimizer(EAOptimizer[Genotype, float]):
             fitness_2tuples.append((round(distance_obj,1), round(remaining_battery_obj,1)))
 
         individuals = []
-        print(nr_joints)
+        # print(nr_joints)
         for i in range(0, len(genotypes)):
             individual = Individual(genotypes[i], fitness_2tuples[i])
             individuals.append(individual)
 
-        nsga2 = NSGA2(False)
+        if(os.path.exists("Plots directory") == False):
+            os.mkdir("Plots directory")
+        path_to_dir = os.path.abspath("Plots directory")
+
+        nsga2 = NSGA2(path_to_dir, True)
         ranking = nsga2(individuals, self.generation_index)
+
+        print("Ranking before", ranking)
+        ranking = self.classify_on_threshold(ranking, "distance", distance_threshold=0.2)
+        print("Ranking after", ranking)
 
         self._best_individual = ranking[0]
 
@@ -363,6 +372,31 @@ class Optimizer(EAOptimizer[Genotype, float]):
             )
         )'''
 
+    def classify_on_threshold(self, ranking, type, distance_threshold=0, remaining_battery_threshold=0):
+        goods = []
+        bads = []
+
+        for individual in ranking:
+            (distance_obj, remaining_battery_obj) = individual.objectives
+            if(type == "battery"):
+                if(remaining_battery_obj < remaining_battery_threshold):
+                    bads.append(individual)
+                else:
+                    goods.append(individual)
+            elif(type == "distance"):
+                if(distance_obj < distance_threshold):
+                    bads.append(individual)
+                else:
+                    goods.append(individual)
+            elif(type == "both"):
+                if(remaining_battery_obj < remaining_battery_threshold or distance_obj < distance_threshold):
+                    bads.append(individual)
+                else:
+                    goods.append(individual)
+
+        goods.extend(bads)
+
+        return goods
 
     def convert_fitness(self, ranking, genotype_id_to_obj):
         cur_fitness = float(len(ranking))
@@ -382,25 +416,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
             genotype_id_to_obj.pop(idd_to_remove)
 
         return genotype_id_to_fitness
-
-    # def convert_nr_joints(self, ranking, genotype_id_to_nr_joints):
-    #     cur_fitness = float(len(ranking))
-    #     genotype_id_to_fitness = {}
-    #
-    #     for individual in ranking:
-    #         nr_joints_to_find = individual.genotype
-    #         idd_to_remove = None
-    #
-    #         for (idd, nr_joints) in genotype_id_to_nr_joints.items():
-    #             if nr_joints_to_find == nr_joints:
-    #                 genotype_id_to_fitness[idd] = cur_fitness
-    #                 cur_fitness -= 1.0
-    #                 idd_to_remove = idd
-    #                 break
-    #
-    #         genotype_id_to_obj.pop(idd_to_remove)
-    #
-    #     return genotype_id_to_fitness
 
     def _on_generation_checkpoint(self, session: AsyncSession) -> None:
         session.add(
