@@ -9,6 +9,7 @@ from revolve2.core.physics.environment_actor_controller import (
 )
 from revolve2.core.physics.running import Batch, Environment, PosedActor, RecordSettings
 from revolve2.runners.mujoco import LocalRunner
+import math
 
 
 class ModularRobotRerunner:
@@ -61,8 +62,13 @@ class ModularRobotRerunner:
             batch.environments.append(env)
 
         runner = LocalRunner(headless=False, start_paused=start_paused)
-        await runner.run_batch(batch, record_settings=record_settings)
+        batch_results = await runner.run_batch(batch, record_settings=record_settings)
 
+        # for results in batch_results.environment_results:
+        #     print("Fitness remaining power: ",results.environment_states[-1].actor_states[0].remaining_power)
+        #     distance = float (math.sqrt((results.environment_states[0].actor_states[0].position[0] - results.environment_states[-1].actor_states[0].position[0]) ** 2 +
+        #                                ((results.environment_states[0].actor_states[0].position[1] - results.environment_states[-1].actor_states[0].position[1]) ** 2)))
+        #     print("Fitness distance: ", distance)
 
 if __name__ == "__main__":
     print(

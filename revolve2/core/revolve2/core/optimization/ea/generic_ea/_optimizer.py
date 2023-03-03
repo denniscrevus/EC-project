@@ -404,12 +404,17 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 for s in parent_selections
             ]
 
+            #TODO: ADD NSGA 2 HERE, CAN'T COMPARE BETWEEN TWO PARETO GRAPHS COMBINE BOTH IN __SAFE_EVALUATE_GENERATION to avoid changing abstract classes.
             # let user evaluate offspring
             (new_fitnesses, new_objectives, new_nr_joints) = await self.__safe_evaluate_generation(
-                offspring,
+                self.__latest_population.extend(offspring),
                 self.__database,
                 self.__db_id.branch(f"evaluate{self.__generation_index}"),
             )
+
+            last_parent_index = len(new_fitnesses) / 2
+            parents_fitnesses = new_fitnesses[:last_parent_index]
+            offspring_fitnesses = new_fitnesses[last_parent_index:]
 
             # combine to create list of individuals
             new_individuals = [
@@ -421,12 +426,13 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 for parent_indices, genotype in zip(parent_selections, offspring)
             ]
 
+            #TODO FINISHED HERE LAST TIME, NEED TO UPDATE WITH PARENTS_FITNESSES AND OFFSPRING_FITNESSES EVERYWHERE
             # let user select survivors between old and new individuals
             old_survivors, new_survivors = self.__safe_select_survivors(
                 [i.genotype for i in self.__latest_population],
-                self.__latest_fitnesses,
+                parents_fitnesses,
                 [i.genotype for i in new_individuals],
-                new_fitnesses,
+                offspring_fitnesses,
                 len(self.__latest_population),
             )
 

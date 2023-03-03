@@ -47,7 +47,7 @@ from revolve2.core.physics.running import (
 
 MAX_POWER = 20
 MIN_POWER = 0
-STEP_SIZE = 0
+STEP_SIZE = 0.0005
 
 class LocalRunner(Runner):
     """Runner for simulating using Mujoco."""
@@ -135,7 +135,7 @@ class LocalRunner(Runner):
         last_control_time = 0.0
         last_sample_time = 0.0
         last_video_time = 0.0  # time at which last video frame was saved
-        remaining_power = Decimal(MAX_POWER)
+        remaining_power = MAX_POWER
         low_energy_threshold = MIN_POWER
 
         results = EnvironmentResults([])
@@ -184,9 +184,6 @@ class LocalRunner(Runner):
 
             cur_step_time = data.time
 
-            global STEP_SIZE
-            STEP_SIZE = cur_step_time - last_step_time
-
             actor_state = cls._get_actor_states(env_descr, data, model, remaining_power)
 
             # update remaining power of robot
@@ -194,6 +191,7 @@ class LocalRunner(Runner):
 
             # finish simulation if remaining power is non positive
             if remaining_power <= low_energy_threshold:
+                print(actor_state)
                 remaining_power = 0
                 break
 
@@ -235,15 +233,6 @@ class LocalRunner(Runner):
 
         # print("FIRST STATE", "\n\n\n")
         # print(results.environment_states[0].time_seconds, results.environment_states[0].actor_states[0].remaining_power, results.environment_states[0].actor_states[0].njnts)
-        # print("LAST STATE", "\n\n\n")
-        # print(results.environment_states[-1].time_seconds, results.environment_states[-1].actor_states[0].remaining_power,
-        #       results.environment_states[-1].actor_states[0].njnts)
-
-        #print("Fitness remaining power: ",results.environment_states[-1].actor_states[0].remaining_power)
-        #distance = float (math.sqrt((results.environment_states[0].actor_states[0].position[0] - results.environment_states[-1].actor_states[0].position[0]) ** 2 +
-         #                           ((results.environment_states[0].actor_states[0].position[1] - results.environment_states[-1].actor_states[0].position[1]) ** 2)))
-        #print("Fitness distance: ", distance)
-
         return results
 
     async def run_batch(
@@ -349,6 +338,8 @@ class LocalRunner(Runner):
                 #robot.find(namespace="joint", identifier=joint.name).stiffness = -0.1
                 robot.actuator.add(
                     "position",
+                    ctrllimited=True,
+                    forcelimited=True,
                     kp=150.0,
                     #kp = 5.0
                     ctrlrange="-1.0 1.0", # limits the range of the position controller
@@ -361,6 +352,8 @@ class LocalRunner(Runner):
                 robot.actuator.add(
                     "velocity",
                     kv=0.2,
+                    ctrllimited=True,
+                    forcelimited=True,
                     #kv = 0.05,
                     ctrlrange="-1.0 1.0",  # limits the range of the position controller
                     forcerange=f"{-force_range} {force_range}",  # limits the force of the position controller
@@ -407,7 +400,7 @@ class LocalRunner(Runner):
 
     @staticmethod
     def _get_actor_state(
-        robot_index: int, data: mujoco.MjData, model: mujoco.MjModel, remaining_power: Decimal
+        robot_index: int, data: mujoco.MjData, model: mujoco.MjModel, remaining_power: float
     ) -> ActorState:
         bodyid = mujoco.mj_name2id(
             model,
@@ -433,15 +426,14 @@ class LocalRunner(Runner):
         hinge_torques     = [data.sensordata[model.sensor_adr[i]] for i in sensor_indices]
 
         # compute estimated power of the actor
-        est_power = Decimal(0)
+        est_power = 0
         for vel, angle, torque in zip(hinge_vels, hinge_angles, hinge_torques):
-            est_power += Decimal(abs(torque)) * Decimal(abs(vel))
+            est_power += abs(torque * vel * STEP_SIZE)
 
-            # print(STEP_SIZE)
         # print("Power used: ", est_power)
         # print("Energy used: ", Decimal(STEP_SIZE) * est_power)
 
-        remaining_power -= (est_power * Decimal(STEP_SIZE))
+        remaining_power -= est_power
 
         # print("Number of joints: ", num_jnts)
         # print("Hinge angles: ", hinge_angles)

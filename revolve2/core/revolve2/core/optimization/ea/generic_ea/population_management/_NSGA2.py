@@ -1,12 +1,15 @@
 import copy
 import math
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 from matplotlib import cm
+import os
 
 class NSGA2:
-
-    def __init__(self, debug: bool = True):
+    def __init__(self, path_to_dir: str, debug: bool = True):
+        self.path_to_dir = path_to_dir
         self.debug = debug
 
     def __call__(self, population_individuals,generation_index):
@@ -37,7 +40,7 @@ class NSGA2:
 
 
         if self.debug:
-           self._visualize(objectives, sorted_fronts, new_individuals, discarded_individuals, front_no, generation_index)
+            self._visualize(objectives, sorted_fronts, new_individuals, discarded_individuals, front_no, generation_index)
 
         return new_individuals
 
@@ -52,8 +55,18 @@ class NSGA2:
             fig = plt.figure()
             ax = fig.add_subplot(111)
 
+        fronts = {}
+
         for individual_index in sorted_fronts:
             front_number = int(front_no[individual_index]) - 1
+
+            if front_number in fronts.keys():
+                points_in_front = fronts.get(front_number)
+                points_in_front.append((-objectives[individual_index, 0], -objectives[individual_index, 1]))
+                fronts[front_number] = points_in_front
+            else:
+                fronts[front_number] = [(-objectives[individual_index, 0], -objectives[individual_index, 1])]
+
             if objectives.shape[1] == 3:
                 ax.scatter(objectives[individual_index, 0], objectives[individual_index, 1], objectives[individual_index, 2], s=10*(number_of_fronts-front_number),
                            color=colors[front_number])
@@ -61,15 +74,20 @@ class NSGA2:
                 ax.scatter(-objectives[individual_index, 0], -objectives[individual_index, 1], s=5*(number_of_fronts-front_number),
                             color=colors[front_number])
 
+        for (front_number, points_in_front) in fronts.items():
+            sorted_front = sorted(points_in_front, key=(lambda a: a[0]))
+            ax.plot([point[0] for point in sorted_front], [point[1] for point in sorted_front], color=colors[front_number])
+
         for individual in new_individuals:
             ax.scatter(individual.objectives[0], individual.objectives[1], s=3, color='black')
 
         for individual in discarded_population:
             ax.scatter(individual.objectives[0], individual.objectives[1], s=2, color='white')
 
-        fig.savefig("/home/ec22mandaldennis/Desktop/revolve2_good/revolve2/examples/optimize_modular/database/front_plot_" + str(generation_index) + ".png")
-
-        plt.close()
+        # print(str(generation_index))
+        # print("Fronts plot" + str(generation_index) + ".png")
+        fig.savefig(self.path_to_dir + "/Fronts plot" + str(generation_index) + ".png")
+        del ax
 
     def nd_sort(self, objectives, max_range):
         number_of_individuals, number_of_objectives = objectives.shape

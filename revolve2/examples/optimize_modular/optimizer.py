@@ -322,14 +322,19 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
         counter = -1
         for environment_result in batch_results.environment_results:
+            print(environment_result)
+
+            if(len(environment_result.environment_states) == 0):
+                continue
+
             (distance_obj, remaining_battery_obj) = calculate_fitness(
                                                             environment_result.environment_states[0].actor_states[0],
                                                             environment_result.environment_states[-1].actor_states[0],
                                                     )
             counter += 1
-            genotype_id_to_obj[counter] = (round(distance_obj,1), round(remaining_battery_obj,1))
+            genotype_id_to_obj[counter] = (round(distance_obj,3), round(remaining_battery_obj,3))
             nr_joints.append(environment_result.environment_states[0].actor_states[0].njnts)
-            fitness_2tuples.append((round(distance_obj,1), round(remaining_battery_obj,1)))
+            fitness_2tuples.append((round(distance_obj,3), round(remaining_battery_obj,3)))
 
         individuals = []
         # print(nr_joints)
@@ -344,9 +349,9 @@ class Optimizer(EAOptimizer[Genotype, float]):
         nsga2 = NSGA2(path_to_dir, True)
         ranking = nsga2(individuals, self.generation_index)
 
-        print("Ranking before", ranking)
-        ranking = self.classify_on_threshold(ranking, "distance", distance_threshold=0.2)
-        print("Ranking after", ranking)
+        # print("Ranking before", ranking)
+        ranking = self.classify_on_threshold(ranking, "both", distance_threshold=0.4, remaining_battery_threshold=17)
+        # print("Ranking after", ranking)
 
         self._best_individual = ranking[0]
 

@@ -29,7 +29,8 @@ async def main() -> None:
     db = open_async_database_sqlite("./database0")
 
     async with AsyncSession(db) as session:
-        desired_generation_id = 11
+        desired_generation_id = 20
+
 
         sorted_individuals = (
             await session.execute(
@@ -107,12 +108,12 @@ async def main() -> None:
         genotypes = []
 
         for best_individual in sorted_individuals:
+            # if remaining_powers[counter] != 20 or remaining_powers[counter] == 11.6:
+            #     counter += 1
+            #     continue
             # print(f"fitness: {best_individual[2].value}")
-            if(distances[counter] != 2.6):
-                counter += 1
-                continue
 
-            # print(f"Generation = {best_individual[0].generation_index}, {distances[counter]}, {remaining_powers[counter]}")
+            print(f"Generation = {best_individual[0].generation_index}, {distances[counter]}, {remaining_powers[counter]}")
 
             genotype = (
                 await GenotypeSerializer.from_database(
@@ -124,8 +125,22 @@ async def main() -> None:
             robots_to_simulate.append(develop(genotype))
             counter += 1
 
+        # for best_individual in sorted_individuals:
+        #
+        #     counter += 1
+        #     if counter == 4:
+        #         genotype = (
+        #             await GenotypeSerializer.from_database(
+        #                 session, [best_individual[1].genotype_id]
+        #             )
+        #         )[0]
+        #
+        #         genotypes.append(genotype)
+        #         robots_to_simulate.append(develop(genotype))
+        #         break
+
         batch = Batch(
-            simulation_time=10,
+            simulation_time=30,
             sampling_frequency=5,
             control_frequency=60,
         )
@@ -153,7 +168,7 @@ async def main() -> None:
 
         runner = LocalRunner(headless=True, num_simulators=64)
         batch_results = await runner.run_batch(batch)
-        print(batch_results)
+        # print(batch_results)
 
         rerunner = ModularRobotRerunner()
         await rerunner.rerun(robots_to_simulate, 20)
