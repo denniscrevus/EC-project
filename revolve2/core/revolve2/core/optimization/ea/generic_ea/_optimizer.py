@@ -21,6 +21,7 @@ from ._database import (
     DbEAOptimizerParent,
     DbEAOptimizerState,
 )
+import numpy as np
 
 Genotype = TypeVar("Genotype")
 Fitness = TypeVar("Fitness")
@@ -377,8 +378,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             initial_fitnesses = self.__latest_fitnesses
             initial_objectives = self.__objectives
             initial_nr_joints = self.__nr_joints
-
-            self.__generation_index += 1
+            #
+            # self.__generation_index += 1
         else:
             initial_population = None
             initial_fitnesses = None
@@ -386,7 +387,6 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             initial_nr_joints = None
 
         while self.__safe_must_do_next_gen():
-
             # let user select parents
             parent_selections = self.__safe_select_parents(
                 [i.genotype for i in self.__latest_population],
@@ -404,18 +404,6 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 for s in parent_selections
             ]
 
-            #TODO: ADD NSGA 2 HERE, CAN'T COMPARE BETWEEN TWO PARETO GRAPHS COMBINE BOTH IN __SAFE_EVALUATE_GENERATION to avoid changing abstract classes.
-            # let user evaluate offspring
-            (new_fitnesses, new_objectives, new_nr_joints) = await self.__safe_evaluate_generation(
-                self.__latest_population.extend(offspring),
-                self.__database,
-                self.__db_id.branch(f"evaluate{self.__generation_index}"),
-            )
-
-            last_parent_index = len(new_fitnesses) / 2
-            parents_fitnesses = new_fitnesses[:last_parent_index]
-            offspring_fitnesses = new_fitnesses[last_parent_index:]
-
             # combine to create list of individuals
             new_individuals = [
                 _Individual(
@@ -426,7 +414,20 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 for parent_indices, genotype in zip(parent_selections, offspring)
             ]
 
-            #TODO FINISHED HERE LAST TIME, NEED TO UPDATE WITH PARENTS_FITNESSES AND OFFSPRING_FITNESSES EVERYWHERE
+            # let user evaluate offspring
+            (new_fitnesses, new_objectives, new_nr_joints) = await self.__safe_evaluate_generation(
+                ([individual.genotype for individual in self.__latest_population] + offspring),
+                self.__database,
+                self.__db_id.branch(f"evaluate{self.__generation_index}"),
+            )
+
+            last_parent_index = int(len(new_fitnesses) / 2)
+            parents_fitnesses = new_fitnesses[:last_parent_index]
+
+            offspring_fitnesses = new_fitnesses[last_parent_index:]
+            offspring_objectives = new_objectives[last_parent_index:]
+            offspring_joints = new_nr_joints[last_parent_index:]
+
             # let user select survivors between old and new individuals
             old_survivors, new_survivors = self.__safe_select_survivors(
                 [i.genotype for i in self.__latest_population],
@@ -437,9 +438,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             )
 
             survived_new_individuals = [new_individuals[i] for i in new_survivors]
-            survived_new_fitnesses = [new_fitnesses[i] for i in new_survivors]
-            survived_new_objectives = [new_objectives[i] for i in new_survivors]
-            survived_new_nr_joints = [new_nr_joints[i] for i in new_survivors]
+            survived_new_fitnesses = [offspring_fitnesses[i] for i in new_survivors]
+            survived_new_objectives = [offspring_objectives[i] for i in new_survivors]
+            survived_new_nr_joints = [offspring_joints[i] for i in new_survivors]
 
             # set ids for new individuals
             for individual in survived_new_individuals:
@@ -451,7 +452,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             ] + survived_new_individuals
 
             self.__latest_fitnesses = [
-                self.__latest_fitnesses[i] for i in old_survivors
+                parents_fitnesses[i] for i in old_survivors
             ] + survived_new_fitnesses
 
             self.__objectives = [
@@ -464,10 +465,22 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
 
             self.__generation_index += 1
 
-            print(initial_objectives)
-            print(survived_new_objectives)
-            print(initial_nr_joints)
-            print(survived_new_nr_joints)
+            marked = np.zeros(len(self.__latest_fitnesses))
+            counter = 1;
+
+            for i in range(0, len(self.__latest_fitnesses)):
+                min = 1000
+                min_index = -1
+
+                for j in range(0, len(self.__latest_fitnesses)):
+                    if marked[j] == 0 and self.__latest_fitnesses[j] < min:
+                        min = self.__latest_fitnesses[j]
+                        min_index = j
+
+                self.__latest_fitnesses[min_index] = counter
+                marked[min_index] = 1
+                counter += 1
+
             # save generation and possibly fitnesses of initial population
             # and let user save their state
             async with AsyncSession(self.__database) as session:

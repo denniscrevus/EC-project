@@ -38,7 +38,6 @@ class NSGA2:
         new_individuals = [all_individuals[index] for index in sorted_fronts]
         discarded_individuals = []
 
-
         if self.debug:
             self._visualize(objectives, sorted_fronts, new_individuals, discarded_individuals, front_no, generation_index)
 

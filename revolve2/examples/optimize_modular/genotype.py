@@ -271,14 +271,14 @@ def crossover(
     )
 
 
-def develop(genotype: Genotype) -> ModularRobot:
+def develop(genotype: Genotype, max_parts: int) -> ModularRobot:
     """
     Develop the genotype into a modular robot.
 
     :param genotype: The genotype to create the robot from.
     :returns: The created robot.
     """
-    body = body_develop(genotype.body)
+    body = body_develop(genotype.body, max_parts)
     brain = brain_develop(genotype.brain, body)
     return ModularRobot(body, brain)
 

@@ -51,6 +51,7 @@ class __Module:
 
 def develop_v1(
     genotype: Genotype,
+    max_parts_param: int,
 ) -> Body:
     """
     Develop a CPPNWIN genotype into a modular robot body.
@@ -61,8 +62,7 @@ def develop_v1(
     :returns: The create body.
     :raises RuntimeError: In case a module is encountered that is not supported.
     """
-    max_parts = 10
-
+    max_parts = max_parts_param
 
     body_net = multineat.NeuralNetwork()
     genotype.genotype.BuildPhenotype(body_net)

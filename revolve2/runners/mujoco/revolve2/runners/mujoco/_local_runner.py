@@ -45,7 +45,6 @@ from revolve2.core.physics.running import (
     Runner,
 )
 
-MAX_POWER = 20
 MIN_POWER = 0
 STEP_SIZE = 0.0005
 
@@ -55,12 +54,15 @@ class LocalRunner(Runner):
     _headless: bool
     _start_paused: bool
     _num_simulators: int
+    _force_range: float
 
     def __init__(
         self,
         headless: bool = False,
         start_paused: bool = False,
         num_simulators: int = 1,
+        force_range: float = 3,
+        max_power: float = 20,
     ):
         """
         Initialize this object.
@@ -80,6 +82,8 @@ class LocalRunner(Runner):
         self._headless = headless
         self._start_paused = start_paused
         self._num_simulators = num_simulators
+        self._force_range = force_range
+        self._max_power = max_power
 
     @classmethod
     def _run_environment(
@@ -92,11 +96,13 @@ class LocalRunner(Runner):
         control_step: float,
         sample_step: float,
         simulation_time: int,
+        force_range: float,
+        max_power: float,
     ) -> EnvironmentResults:
         logging.info(f"Environment {env_index}")
         getcontext().prec = 40
 
-        model = mujoco.MjModel.from_xml_string(cls._make_mjcf(env_descr))
+        model = mujoco.MjModel.from_xml_string(cls._make_mjcf(env_descr, force_range))
 
         # TODO initial dof state
         data = mujoco.MjData(model)
@@ -135,7 +141,7 @@ class LocalRunner(Runner):
         last_control_time = 0.0
         last_sample_time = 0.0
         last_video_time = 0.0  # time at which last video frame was saved
-        remaining_power = MAX_POWER
+        remaining_power = max_power
         low_energy_threshold = MIN_POWER
 
         results = EnvironmentResults([])
@@ -191,7 +197,6 @@ class LocalRunner(Runner):
 
             # finish simulation if remaining power is non positive
             if remaining_power <= low_energy_threshold:
-                print(actor_state)
                 remaining_power = 0
                 break
 
@@ -268,6 +273,8 @@ class LocalRunner(Runner):
                     control_step,
                     sample_step,
                     batch.simulation_time,
+                    self._force_range,
+                    self._max_power,
                 ))
                 '''for actor_index, posed_actor in enumerate(env_descr.actors):
                     print(actor_index, posed_actor.actor)'''
@@ -280,7 +287,7 @@ class LocalRunner(Runner):
         return results
 
     @staticmethod
-    def _make_mjcf(env_descr: Environment) -> str:
+    def _make_mjcf(env_descr: Environment, force_range: float) -> str:
         env_mjcf = mjcf.RootElement(model="environment")
 
         env_mjcf.compiler.angle = "radian"
@@ -324,8 +331,6 @@ class LocalRunner(Runner):
             ) as botfile:
                 mujoco.mj_saveLastXML(botfile.name, model)
                 robot = mjcf.from_file(botfile)
-
-            force_range = 4.0  # limits force of each actuator (preventing jumping)
 
             for i, joint in enumerate(posed_actor.actor.joints):
 
@@ -428,10 +433,9 @@ class LocalRunner(Runner):
         # compute estimated power of the actor
         est_power = 0
         for vel, angle, torque in zip(hinge_vels, hinge_angles, hinge_torques):
+            if(torque < 0.01):
+                torque = 0.01
             est_power += abs(torque * vel * STEP_SIZE)
-
-        # print("Power used: ", est_power)
-        # print("Energy used: ", Decimal(STEP_SIZE) * est_power)
 
         remaining_power -= est_power
 

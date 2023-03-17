@@ -60,6 +60,11 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
     _crossover_prob: float
     _mutation_prob: float
+    _force_range: float
+    _max_parts: int
+    _threshold_dist: float
+    _max_power: float
+    _threshold_energy: float
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -77,6 +82,11 @@ class Optimizer(EAOptimizer[Genotype, float]):
         offspring_size: int,
         crossover_prob: float,
         mutation_prob: float,
+        force_range: float,
+        max_parts: int,
+        max_power: float,
+        threshold_dist: float,
+        threshold_energy: float,
     ) -> None:
         """
         Initialize this class async.
@@ -112,6 +122,11 @@ class Optimizer(EAOptimizer[Genotype, float]):
         )
 
         self._db_id = db_id
+        self._force_range = force_range
+        self._max_parts = max_parts
+        self._max_power = max_power
+        self._threshold_dist = threshold_dist
+        self._threshold_energy = threshold_energy
         self._init_runner()
         self._innov_db_body = innov_db_body
         self._innov_db_brain = innov_db_brain
@@ -200,7 +215,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         return True
 
     def _init_runner(self) -> None:
-        self._runner = LocalRunner(headless=True, num_simulators=64)
+        self._runner = LocalRunner(headless=True, num_simulators=64, force_range=self._force_range, max_power=self._max_power)
 
     def _select_parents(
         self,
@@ -294,7 +309,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         )
 
         for genotype in genotypes:
-            actor, controller = develop(genotype).make_actor_and_controller()
+            actor, controller = develop(genotype, self._max_parts).make_actor_and_controller()
             bounding_box = actor.calc_aabb()
             env = Environment(EnvironmentActorController(controller))
             env.actors.append(
@@ -322,9 +337,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
         counter = -1
         for environment_result in batch_results.environment_results:
-            print(environment_result)
-
-            if(len(environment_result.environment_states) == 0):
+            if len(environment_result.environment_states) == 0:
                 continue
 
             (distance_obj, remaining_battery_obj) = calculate_fitness(
@@ -337,7 +350,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             fitness_2tuples.append((round(distance_obj,3), round(remaining_battery_obj,3)))
 
         individuals = []
-        # print(nr_joints)
+
         for i in range(0, len(genotypes)):
             individual = Individual(genotypes[i], fitness_2tuples[i])
             individuals.append(individual)
@@ -348,36 +361,18 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
         nsga2 = NSGA2(path_to_dir, True)
         ranking = nsga2(individuals, self.generation_index)
-
-        # print("Ranking before", ranking)
-        ranking = self.classify_on_threshold(ranking, "both", distance_threshold=0.4, remaining_battery_threshold=17)
-        # print("Ranking after", ranking)
+        ranking = self.classify_on_threshold(ranking, "both", distance_threshold=self._threshold_dist, remaining_battery_threshold=self._threshold_energy)
+        converted_fitness = self.convert_fitness(ranking, genotype_id_to_obj)
 
         self._best_individual = ranking[0]
 
-        converted_fitness = self.convert_fitness(ranking, genotype_id_to_obj)
-
         final_fitness_list = []
-
         for idd in range(0, len(genotypes)):
             final_fitness_list.append(converted_fitness[idd])
 
         return final_fitness_list, fitness_2tuples, nr_joints
 
-
-    #@staticmethod
-    '''def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
-        # TODO simulation can continue slightly passed the defined sim time.
-
-        # distance traveled on the xy plane
-        return float(
-            math.sqrt(
-                (begin_state.position[0] - end_state.position[0]) ** 2
-                + ((begin_state.position[1] - end_state.position[1]) ** 2)
-            )
-        )'''
-
-    def classify_on_threshold(self, ranking, type, distance_threshold=0, remaining_battery_threshold=0):
+    def classify_on_threshold(self, ranking, type, distance_threshold=0.0, remaining_battery_threshold=0.0):
         goods = []
         bads = []
 
@@ -394,7 +389,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 else:
                     goods.append(individual)
             elif(type == "both"):
-                if(remaining_battery_obj < remaining_battery_threshold or distance_obj < distance_threshold):
+                if(remaining_battery_obj > remaining_battery_threshold or distance_obj < distance_threshold):
                     bads.append(individual)
                 else:
                     goods.append(individual)

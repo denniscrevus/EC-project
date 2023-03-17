@@ -26,11 +26,10 @@ from revolve2.runners.mujoco import LocalRunner
 
 async def main() -> None:
     """Run the script."""
-    db = open_async_database_sqlite("./database0")
+    db = open_async_database_sqlite("./Experiment_max_power_129_max_parts15/Run 4/database0")
 
     async with AsyncSession(db) as session:
-        desired_generation_id = 20
-
+        desired_generation_id = 50
 
         sorted_individuals = (
             await session.execute(
@@ -122,7 +121,7 @@ async def main() -> None:
             )[0]
 
             genotypes.append(genotype)
-            robots_to_simulate.append(develop(genotype))
+            robots_to_simulate.append(develop(genotype, 15))
             counter += 1
 
         # for best_individual in sorted_individuals:
@@ -139,35 +138,35 @@ async def main() -> None:
         #         robots_to_simulate.append(develop(genotype))
         #         break
 
-        batch = Batch(
-            simulation_time=30,
-            sampling_frequency=5,
-            control_frequency=60,
-        )
-
-        for genotype in genotypes:
-            actor, controller = develop(genotype).make_actor_and_controller()
-            bounding_box = actor.calc_aabb()
-            env = Environment(EnvironmentActorController(controller))
-            env.actors.append(
-                PosedActor(
-                    actor,
-                    Vector3(
-                        [
-                            0.0,
-                            0.0,
-                            bounding_box.size.z / 2.0 - bounding_box.offset.z,
-                        ]
-                    ),
-                    Quaternion(),
-                    [0.0 for _ in controller.get_dof_targets()],
-                ),
-            )
-
-            batch.environments.append(env)
-
-        runner = LocalRunner(headless=True, num_simulators=64)
-        batch_results = await runner.run_batch(batch)
+        # batch = Batch(
+        #     simulation_time=30,
+        #     sampling_frequency=5,
+        #     control_frequency=60,
+        # )
+        #
+        # for genotype in genotypes:
+        #     actor, controller = develop(genotype).make_actor_and_controller()
+        #     bounding_box = actor.calc_aabb()
+        #     env = Environment(EnvironmentActorController(controller))
+        #     env.actors.append(
+        #         PosedActor(
+        #             actor,
+        #             Vector3(
+        #                 [
+        #                     0.0,
+        #                     0.0,
+        #                     bounding_box.size.z / 2.0 - bounding_box.offset.z,
+        #                 ]
+        #             ),
+        #             Quaternion(),
+        #             [0.0 for _ in controller.get_dof_targets()],
+        #         ),
+        #     )
+        #
+        #     batch.environments.append(env)
+        #
+        # runner = LocalRunner(headless=True, num_simulators=64)
+        # batch_results = await runner.run_batch(batch)
         # print(batch_results)
 
         rerunner = ModularRobotRerunner()
